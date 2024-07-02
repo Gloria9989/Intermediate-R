@@ -1,0 +1,134 @@
+---
+title: "coding sample (Intermediate R)"
+author: "Gloria Xiang"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r load_packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(dslabs)
+library(stats)
+library(tibble)
+library(purrr)
+```
+
+```{r}
+ProjectTycho_Level1_v1_0_0 <- read_csv("ProjectTycho_Level1_v1.0.0.csv")
+ProjectTycho_Level1<-unique(ProjectTycho_Level1_v1_0_0)
+dim(ProjectTycho_Level1)
+```
+
+### For data frame `ProjectTycho_Level1`, drop its rows that have `disease = "DIPHTHERIA"`. After that, output the distinct values of `ProjectTycho_Level1$disease`.
+
+```{r}
+ProjectTycho_Level1<-ProjectTycho_Level1 %>% filter(disease!="DIPHTHERIA")
+unique(ProjectTycho_Level1$disease)  ## only 7 distinct values
+```
+
+### Separate the column `epi_week` of `ProjectTycho_Level1` into two new columns named as `year` and `week` which are in the `integer` type. 
+```{r Q3}
+ProjectTycho_Level1<-ProjectTycho_Level1 %>% 
+  separate(epi_week, into=c("year", "week"),sep=4, convert = TRUE)
+head(ProjectTycho_Level1)
+dim(ProjectTycho_Level1)
+```
+
+### From `ProjectTycho_Level1`, create a new data frame, named as `ProjectTycho_count`, that contains the count of cases of each disease for each state at each year, with column names `disease`, `state`, `year`, `weeks_reporting` and `count`. 
+```{r Q4}
+ProjectTycho_count<-ProjectTycho_Level1 %>% 
+  drop_na(cases)  %>% 
+  group_by(disease, loc, year)  %>% 
+  summarize(week_reporting=n(),count=sum(cases))   %>% 
+  rename(state=loc) %>% 
+  ungroup()
+head(ProjectTycho_count)
+dim(ProjectTycho_count)
+```
+
+
+
+```{r}
+region_state <- list(
+  Northeast = state.name[state.region=="Northeast"], 
+  South = state.name[state.region=="South"],
+  North_Central = state.name[state.region=="North Central"], 
+  West = state.name[state.region=="West"] 
+  ) 
+str(region_state)
+```
+
+
+
+### Add `"District Of Columbia"` into the element `South` of the list `region_state` . Output the structure of the new `region_state` list. 
+
+```{r}
+region_state$South <- c(region_state$South, "District Of Columbia")
+str(region_state) # the element South must be shown with chr [1:17] not chr [1:16]
+```
+
+
+
+###  From the data `us_contagious_diseases` of package `dslabs`, ignoring the variable `weeks_reporting`, compute the yearly incidence rate of each disease for each of the 4 geographic regions (Northeast, South, North Central, West). Store the result into a new data frame, named as `region_incidence`, with columns `disease`, `region`, `year`, and `incidence_per_millon` (i.e., the yearly incidence rate times one million). 
+```{r}
+data(us_contagious_diseases)
+region_incidence <- us_contagious_diseases %>%
+  select(-weeks_reporting) %>% 
+  drop_na() %>%
+  mutate(region = fct_collapse(state,
+    Northeast = region_state$Northeast,
+    South = region_state$South,
+    North_Central = region_state$North_Central,
+    West = region_state$West),
+    .after = disease) %>%
+  group_by(disease, region, year) %>%
+  summarize(incidence_per_millon = sum(count)/sum(population)*1e6) %>%
+  ungroup()
+head(region_incidence)
+dim(region_incidence)
+```
+
+
+
+###  In the data frame `region_incidence`, choose an appropriate `str_` function to add the suffix `_US` to the values in the column `region`. Make sure that the resulting column `region` is a factor with levels in the order: `North_Central_US`, `Northeast_US`, `South_US`, `West_US`.  
+```{r}
+region_incidence <- region_incidence %>% 
+  mutate(region = factor(str_c(region, "_US"))) 
+head(region_incidence) # the column region must be shown with <fct> below the column name
+levels(region_incidence$region) # must be in the requested order
+```
+
+
+
+###  From `region_incidence`, use `ggplot` to provide a line graph that shows the trend of the yearly incidence of disease `Hepatitis A` for all the 4 geographic regions. You need to appropriately reorder the factor levels of `region` to make the graph easier to read with the legend. 
+
+```{r}
+region_incidence.Hepatitis_A <- region_incidence %>% filter(disease == "Hepatitis A")
+region_incidence.Hepatitis_A %>% 
+  ggplot(aes(
+    x = year, y = incidence_per_millon,
+    colour = region
+  )) +
+  # geom_point() +
+  geom_line() +
+  labs(colour = "Region") +
+  xlab("Year") +
+  ylab("Incidence per millon")
+```
+
+It may be better to make the line colors at the year 1970 (around the peaks) line up with the legend:
+```{r}
+region_incidence.Hepatitis_A %>% 
+  ggplot(aes(
+    x = year, y = incidence_per_millon,
+    colour = fct_relevel(region, "West_US","Northeast_US", "South_US", "North_Central_US")
+  )) +
+  # geom_point() +
+  geom_line() +
+  labs(colour = "Region") +
+  xlab("Year") +
+  ylab("Incidence per millon")
+```
+
+
